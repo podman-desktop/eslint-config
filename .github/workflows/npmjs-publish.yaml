@@ -1,0 +1,107 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Publish NPM package to npmjs.com using OIDC
+
+# publish the package on npmjs.com when we push new commits on main branch or new tags
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-version:
+    name: Prepare version info
+    runs-on: ubuntu-26.04
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+      dist-tag: ${{ steps.set-version.outputs.dist-tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set version / dist-tag depending on ref
+        id: set-version
+        run: |
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_REF_TYPE=${GITHUB_REF_TYPE}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # Tag case, e.g. refs/tags/v1.23.1
+            # strip leading v
+            VERSION="${GITHUB_REF_NAME#v}"  # e.g. 1.23.1
+
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "dist-tag=latest" >> "${GITHUB_OUTPUT}"
+          else
+            # main branch, e.g. 0.1.0-next -> 0.1.0-next.202610061200-abc1234
+            SHORT_SHA1=$(git rev-parse --short HEAD)
+            PACKAGE_VERSION=$(jq -r '.version' package.json)
+            STRIPPED_VERSION=${PACKAGE_VERSION%-next}
+            VERSION=${STRIPPED_VERSION}-next.$(date +'%Y%m%d%H%M')-${SHORT_SHA1}
+
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "dist-tag=next" >> "${GITHUB_OUTPUT}"
+          fi
+
+  publish:
+    name: Publish to npm
+    needs: [prepare-version]
+    runs-on: ubuntu-26.04
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        name: Install pnpm
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc' # 24.x for npm publish with OIDC
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Show publish parameters
+        env:
+          VERSION: ${{ needs.prepare-version.outputs.version }}
+          DIST_TAG: ${{ needs.prepare-version.outputs.dist-tag }}
+        run: |
+          echo "Publishing version: ${VERSION}"
+          echo "Using dist-tag:     ${DIST_TAG}"
+
+      - name: Update version in package.json
+        env:
+          VERSION: ${{ needs.prepare-version.outputs.version }}
+        run: pnpm pkg set version="${VERSION}"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to npmjs
+        env:
+          DIST_TAG: ${{ needs.prepare-version.outputs.dist-tag }}
+        run: pnpm publish --provenance --tag "${DIST_TAG}" --no-git-checks --access public

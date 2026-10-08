@@ -1,6 +1,6 @@
 {
   "name": "@podman-desktop/eslint-config",
-  "version": "0.0.1",
+  "version": "0.1.0-next",
   "description": "Shared ESLint config enforcing @podman-desktop's code style",
   "license": "Apache-2.0",
   "type": "module",
