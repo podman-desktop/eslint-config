@@ -18,12 +18,46 @@
 
 import type { Config } from 'eslint/config';
 import { defineConfig } from 'eslint/config';
+import svelteParser from 'svelte-eslint-parser';
+import tseslint from 'typescript-eslint';
+
+/** Files parsed with `@typescript-eslint/parser`. */
+const TYPESCRIPT_FILES = ['**/*.ts', '**/*.mts', '**/*.cts'];
+
+/** Files parsed with `svelte-eslint-parser`, `<script lang="ts">` is handed to `@typescript-eslint/parser`. */
+const SVELTE_FILES = ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'];
 
 /**
  * Shared ESLint configuration for Podman Desktop repositories.
  *
- * Empty for now: it is added to every repository first, then rules are added one by one.
+ * Registers the `typescript-eslint` plugin (for every file, so `@typescript-eslint/*`
+ * rules can be configured) and the parsers for TypeScript and Svelte files. 
  */
-const config: Config[] = defineConfig([]);
+const config: Config[] = defineConfig([
+  {
+    name: '@podman-desktop/eslint-config/typescript-plugin',
+    plugins: {
+      '@typescript-eslint': tseslint.plugin,
+    },
+  },
+  {
+    name: '@podman-desktop/eslint-config/typescript-parser',
+    files: TYPESCRIPT_FILES,
+    languageOptions: {
+      parser: tseslint.parser,
+    },
+  },
+  {
+    name: '@podman-desktop/eslint-config/svelte-parser',
+    files: SVELTE_FILES,
+    languageOptions: {
+      parser: svelteParser,
+      parserOptions: {
+        parser: tseslint.parser,
+        extraFileExtensions: ['.svelte'],
+      },
+    },
+  },
+]);
 
 export default config;

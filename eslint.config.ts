@@ -17,17 +17,8 @@
  ***********************************************************************/
 
 import { defineConfig, globalIgnores } from 'eslint/config';
-import tseslint from 'typescript-eslint';
 
 import podmanDesktop from './src/index.ts';
 
 // lint this repository with its own config
-export default defineConfig([
-  globalIgnores(['dist/**']),
-  {
-    // parser only, the rules come from the shared config
-    files: ['**/*.ts'],
-    extends: [tseslint.configs.base],
-  },
-  podmanDesktop,
-]);
+export default defineConfig([globalIgnores(['dist/**']), podmanDesktop]);
